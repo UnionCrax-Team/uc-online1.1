@@ -1,0 +1,59 @@
+name: Build
+
+on:
+  push:
+    tags: v*.*.*
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-x86:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Restore x86
+        run: dotnet restore "uc-online1.1.csproj" -p:Platform=x86
+
+      - name: Build x86
+        run: dotnet build "uc-online1.1.csproj" -c Release -p:Platform=x86 --no-restore
+
+      - name: Upload artifact
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-x86
+          path: bin/x86/Release/
+
+  release:
+    needs: build-x86
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: build-x86
+          path: build-x86
+
+      - name: Zip artifact
+        run: zip -r build-x86.zip build-x86/
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: build-x86.zip
